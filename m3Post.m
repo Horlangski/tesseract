@@ -21,7 +21,7 @@ function  [resultList] = M3_addZeroZ(input_list)
 resultList = sum(input_list, 1);
 
 for i=1:num
-    idx  = input_list(i,:) < e^-9;
+    idx  = input_list(i,:) < 1e-9;
     resultList(idx) = 0;
 end
 
@@ -29,6 +29,25 @@ return;
 endfunction
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+function  [resultList] = M3_safeDiv(fz, fm)
+%
+% FUNCTION NOTE: 
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+num = length(fz);
+
+resultList = zeros(size(fz));
+%resultList = sum(input_list, 1);
+
+for i=1:num
+    if (fm(i) > 1e-9)
+        resultList(i) = fz(i)/fm(i);
+    end
+end
+
+return;
+endfunction
 
 
 
@@ -50,8 +69,8 @@ end
 
 resultList = input_list1 + input_list2;
 
-idx1 = input_list1< e^-9;
-idx2 = input_list2< e^-9;
+idx1 = input_list1< 1e-9;
+idx2 = input_list2< 1e-9;
 
 resultList(idx1) = 0;
 resultList(idx2) = 0;
@@ -552,13 +571,15 @@ if (1)
        hcl = M3_getHcl(rawList(30:i))
 
        if (i == 30)
-           keyRoi = thisRoi;
+           %keyRoi = thisRoi;
+           keyRoi = (v-rawList(24))/rawList(24);
        end
        
-       if (keyRoi < 0.01 && thisRoi > keyRoi+0.01)
-           %breakCause = 6
-           %breakHere = i
-           %break;
+       morningRoi = (v-rawList(24))/rawList(24);
+       if (keyRoi < 0.01 && morningRoi > keyRoi+0.01)
+           breakCause = 6
+           breakHere = i
+           break;
        end
 
        if (hcl<-0.02)
@@ -1734,13 +1755,14 @@ for beta=1:1:1
         % **********************************
         countPositive = 0;
         countValid    = 0;
+        countRoi      = 0;
         marketRoi    = 0;
         for sid=1:m3_ids
                 m2IndexBase = m2_header_width + (sid-1)*m2_id_width;
                 PSelfRaw  = m2(thisGrIndex, m2IndexBase + m2_index_p - 2);   % Note !!!!!!!!!!!!!
                 n = length(PSelfRaw);
 
-                if (PSelfRaw(n) > e^-9)
+                if (PSelfRaw(n) > 1)
                     countValid++;
                 else
                     continue;
@@ -1752,14 +1774,15 @@ for beta=1:1:1
                     countPositive ++;
                 end
 
-                if (vsValue > 0)
+                if (vsValue > 0 && PSelfRaw(n) > 0)
                     marketRoi  += (PSelfRaw(n) - vsValue)/vsValue;
+                    countRoi ++;
                 end
         end
         ratioPositive = countPositive/countValid;
-        marketRoi = marketRoi/countValid;
+        marketRoi = marketRoi/countRoi;
         m3(ap, (m3_index_market_3)) = ratioPositive;
-        printf ("ratioPositive %f, ap=%d validCount=%d marketRoi=%f\n", ratioPositive, ap, countValid, marketRoi);
+        printf ('ratioPositive %f, ap=%d validCount=%d marketRoi=%f\n', ratioPositive, ap, countValid, marketRoi);
 
 
         % **********************************
@@ -1884,7 +1907,7 @@ for beta=1:1:1
                 if (idsStr>300000 && idsStr<400000)
                     continue;
                 end
-                printf("sid:%d\t jbm_tv: %f, jbm_gb:%f\n", idsStr, jbm_tv, jbm_gb);
+                printf('sid:%d\t jbm_tv: %f, jbm_gb:%f\n', idsStr, jbm_tv, jbm_gb);
 
 
                 % *******************************
@@ -1906,7 +1929,7 @@ for beta=1:1:1
                     %    %continue;
                     %end
                 end
-                printf("sid:%d,\t thisTs:%d,\t IPO:%d,\t hsl:%f\n", idsStr, thisTs, stockBriefIPO(sid), hsl);
+                printf('sid:%f,\t thisTs:%f,\t IPO:%f,\t hsl:%f\n', idsStr, thisTs(1), stockBriefIPO(sid), hsl);
 
 
 
@@ -1942,6 +1965,7 @@ for beta=1:1:1
                 qValueList4= zeros(1,n);
                 qValueList5_upv= zeros(1,n);
                 qValueList6_dov= zeros(1,n);
+                qValueList7    = zeros(1,n);
                 countUPV=0;
                 countDOV=0;
     
@@ -1980,28 +2004,31 @@ for beta=1:1:1
                             vol
                             vol = 0;
                         end
-                        %if (vol/avV > 3)
-                        %    mcaoNum ++;
-                        %end
-                        if ( 1*(gapIndividual) > 0.007)
+                        if (vol/avV > 3)
+                            %mcaoNum ++;
+                            %qValueList7(i) = 0.3 + 0.1 * min(10, vol/avV)
+                            qValueList7(i) = 0.5 + 0.1 * min(10, vol/avV);
+                        end
+                        if ( 1*(gapIndividual) > 0.003)
                             %mcaoNum ++;
                             qValueList2(i) = abs(gapIndividual);
+                            %qValueList7(i) = 0.01 + abs(gapIndividual);
                             %qValueList2(i) = 1;
                         end
-                        if (-1*(gapIndividual) > 0.007)
+                        if (-1*(gapIndividual) > 0.003)
                             %mcaoNum ++;
                             qValueList3(i) = abs(gapIndividual);
                             %qValueList3(i) = 1;
                         end
 
 
-                        if ((i>75 || (i>25&&i<75)) && gapIndividual > 0.003)
+                        if ((i<25 || (i>26 && i<75) || (i>76)) && gapIndividual >  0.005)
                             countUPV ++; 
-                            qValueList5_upv(i)   = vol / gapIndividual ;
+                            qValueList5_upv(i)   = abs(vol / gapIndividual);
                         end
-                        if ((i>75 || (i>25&&i<75)) && gapIndividual < -0.003)
+                        if ((i<25 || (i>26 && i<75) || (i>76)) && gapIndividual < -0.005)
                             countDOV ++;
-                            qValueList6_dov(i)   = -vol / gapIndividual;
+                            qValueList6_dov(i)   = abs(vol / gapIndividual);
                         end
                     end
 
@@ -2078,7 +2105,7 @@ for beta=1:1:1
                     if (gapIndividual >0)
                         if (i>76 &&  gapIndividual>0.04)
                             %thisTs = m2(thisGrIndex, 1);
-                            printf("find mengla:(ts=%d,\t i=%d,\t sstr=%d) ap=%d, sid=%d\n", thisTs(i), i, idsStr, ap, sid);
+                            printf('find mengla:(ts=%d,\t i=%d,\t sstr=%d) ap=%d, sid=%d\n', thisTs(i), i, idsStr, ap, sid);
                         end
                     end
                 end
@@ -2178,7 +2205,9 @@ for beta=1:1:1
             %if (throughRoi<0.05)
             %if (throughRoi<0.03 && nearstRoi>0.0)
             %if (throughRoi<0.07)
-            if (jumpRoi>-0.02 && throughRoi<0.05 && countDOV>1 && countUPV>1)
+            %if (jumpRoi>-0.02 && throughRoi<0.03 && countDOV>1 && countUPV>1)
+            %if (throughRoi<0.05 && countDOV>1 && countUPV>1)
+            if (throughRoi<0.05)
             %if (throughRoi<0.05 && nearstRoi>0.0)
             %if (throughRoi<0.07 && nearstRoi>0.0)
             %if (throughRoi<0.08 && nearstRoi>0.0 && nearstRoi<0.02)
@@ -2211,11 +2240,9 @@ for beta=1:1:1
                 end
 
 
-                %if (countDOV>0 && countUPV>0)
-                %if (1)
                 if (newqd>0)
-                    unitDOV = sum(qValueList6_dov) / countDOV;
-                    unitUPV = sum(qValueList5_upv) / countUPV;
+                    %unitDOV = sum(qValueList6_dov) / countDOV;
+                    %unitUPV = sum(qValueList5_upv) / countUPV;
                     %qd3 = unitDOV / unitUPV;
                     %qd4 = 1/ qd3;
                     %printf ("[%2d,%6d] qd3=%f \t (%d,\t%d)unitDOV,unitUPV=%f,\t%f\n",ap, idsStr,  qd3, countDOV, countUPV, unitDOV, unitUPV);
@@ -2223,11 +2250,9 @@ for beta=1:1:1
                     %qthis = qValueList6_dov(75:n);
                     %qbefo = qValueList6_dov(25:75);
                     qthis = qValueList5_upv(75:n);
-                    qbefo = qValueList5_upv(25:75);
+                    qbefo = qValueList5_upv(1:75);
                     qthisn = sum(qthis>0);
                     qbefon = sum(qbefo>0);
-                    idxsel = qthis > 0;
-                    qthisdov = qthis(idxsel)
                     if (qthisn>0 && qbefon>0)
                         %thisdayUnitDOV = sum(qthis) / qthisn;
                         %befodayUnitDOV = sum(qbefo) / qbefon;
@@ -2237,10 +2262,12 @@ for beta=1:1:1
                         %qd3 = thisdayUnitDOV/befodayUnitDOV;
                         qd3 = thisdayUnitUPV/befodayUnitUPV;
                         qd4 = 1/ qd3;
-                        printf ("[%2d,%6d] qd3=%f \t (%d,\t%d)unitDOV,unitUPV=%f,\t%f\n",ap, idsStr,  qd3, countDOV, countUPV, unitDOV, unitUPV);
                     else
-                        newqd = 0;
+                        %newqd = 0;
+                        qd3 = 0.9990;
+                        qd4 = 0.9990;
                     end
+                    printf ('[%2d,%6d] qd3=%f\n',ap, idsStr,  qd3);
                 end
             end
 
@@ -2255,21 +2282,11 @@ for beta=1:1:1
             %if (throughRoi<0.08 && meanv>0 && lastdayZhangfu<-0.03)
             %if (throughRoi<0.08 && meanv>0 && lastdayZhangfu>0.03)
             %if (throughRoi<0.08 && PSelfRaw(n)>meanv)
-            if (throughRoi<0.08)
-                hsl2 = hsl;
+            %if (cje>10^8*2 && hsl>0.01 && throughRoi<0.08)
+            if (throughRoi<0.08 &&  lastdayZhangfu>0.05)
+                %hsl2 = hsl;
+                hsl2 = -1 * jumpRoi;
             end
-
-  
-            % ----------------------------------------------
-            nearstRoi2 = 0;
-            stdvar2 = 0;
-            if (PSelfRaw(74)>0)
-                nearstRoi2 = (PSelfRaw(100) - PSelfRaw(74))/PSelfRaw(74)
-            end
-            if (nearstRoi2<0.01)
-                stdvar2 =  n + sum(qValueList(74:n ))
-            end
-
 
 
             % ----------------------------------------------
@@ -2306,14 +2323,14 @@ for beta=1:1:1
             featureList7_cje(ap, sid)       = cje;
             %featureList7_cje(ap, sid)       = jbm_tv;
             %featureList7_cje(ap, sid)       = jbm_gb;
-            featureList8_mcao_up(ap, sid)    = sum(qValueList2(50:82))/n;
-            featureList9_mcao_do(ap, sid)    = sum(qValueList3(50:82))/n;
+            featureList8_mcao_up(ap, sid)    = sum(qValueList2(50:n))/n;
+            featureList9_mcao_do(ap, sid)    = sum(qValueList3(50:n))/n;
             featureList10_activity(ap, sid) =  activity;
             featureList11_cjeRal(ap, sid)   =  cjeRal;
-            featureList12_mrv(ap, sid)   =  newqd2;
+            %featureList12_mrv(ap, sid)   =  newqd2;
+            featureList12_mrv(ap, sid)   = sum(qValueList7(50:n))/n;
             sid
             activity
-            mcaoNum
             % ----------------------------------------------
 
         end %endof sid
@@ -2340,6 +2357,15 @@ for beta=1:1:1
         featureTmp3 = featureList8_mcao_up(ap-0, :) + featureList8_mcao_up(ap-1, :) + featureList8_mcao_up(ap-2, :);
         featureTmp4 = featureList9_mcao_do(ap-0, :) + featureList9_mcao_do(ap-1, :) + featureList9_mcao_do(ap-2, :);
         featureTmp5 = featureTmp3 + featureTmp4;
+        sort(featureTmp5)
+
+        featureTmp6 = featureList8_mcao_up(ap-0, :) + featureList9_mcao_do(ap-0, :) + ...
+                      featureList8_mcao_up(ap-1, :) + featureList9_mcao_do(ap-1, :) + ...
+                      featureList8_mcao_up(ap-2, :) + featureList9_mcao_do(ap-2, :);
+        featureTmp7 = M3_safeDiv(featureTmp6, featureTmp5);
+
+
+        featureTmp8 = featureList12_mrv(ap-0, :) +  featureList12_mrv(ap-1, :) + featureList12_mrv(ap-2, :) + featureList12_mrv(ap-3, :);
         %ft1 = M3_regular( featureList7_cje(ap,:) );
         %ft2 = M3_regular( featureTmp1 );
         %featureTmp4 = M3_regular( ft1 .* ft2 )
@@ -2413,11 +2439,11 @@ for beta=1:1:1
 
         % compute avg-cje-100
         %---------------------
-        q_cur_cje   = featureList7_cje(ap,:);
+        %q_cur_cje   = featureList7_cje(ap,:);
         %q_tmp       = M3_rectangle(featureTmp1, 1, 50,  1);
-        q_tmp       = M3_rectangle(featureList2_qd(ap,:), 1, 10,  1);
-        avg_cje_100 = sum(q_cur_cje(q_tmp>0)) / 10.;
-        printf ("ap=%d avg_shizhi_100=%f\n", ap, avg_cje_100);
+        %q_tmp       = M3_rectangle(featureList2_qd(ap,:), 1, 10,  1);
+        %avg_cje_100 = sum(q_cur_cje(q_tmp>0)) / 10.;
+        %printf ("ap=%d avg_shizhi_100=%f\n", ap, avg_cje_100);
         %q_cje_ok = q_cur_cje(q_cur_cje>avg_cje_100*0.7 & q_cur_cje<avg_cje_100*1.3);
 
         %---------------------
@@ -2436,10 +2462,33 @@ for beta=1:1:1
         %q3_fac5 = M3_regular(featureList2_qd(ap,:));
         %qList3 = M3_addZeroZ([q3_fac1; q3_fac2;  q3_fac4;  q3_fac5]);
         %q3Num = sum(qList3 >0)
-        q3_fac1 = M3_rectangle(qList2, 1, 3,  1);
-        q3_fac2 = M3_regular( featureList3(ap,:) );
-        qList3 = M3_addZero(q3_fac1, q3_fac2);
-        q3Num = sum(qList3 >0)
+        %q3_fac1 = M3_rectangle(featureList12_mrv(ap-1,:)+featureList12_mrv(ap,:), 1, 50,  1);
+        %---------------------
+        %q3_fac1 = M3_rectangle(featureTmp7, 0, 500, 0);
+        %q3_fac2 = M3_rectangle(featureTmp7, 1, 500, 0);
+        %q3_fac1 = M3_rectangle(featureList6_x(ap,:), 1, 100, 1);
+        %---------------------
+        %q3_fac1 = M3_rectangle(featureTmp8, 1, 50, 1);
+        %q3_fac2 = M3_regular(featureList2_qd(ap,:));
+        %qList3 = M3_addZeroZ([q3_fac1; q3_fac2]);
+        %q3Num = sum(qList3 >0)
+        %---------------------
+        %q3_fac1 = M3_rectangle(featureTmp8, 0, 500, 0);
+        %q3_fac2 = M3_rectangle(featureTmp8, 1, 500, 0);
+        %%q3_fac3 = M3_regular(featureList2_qd(ap,:));
+        %qList3 = M3_addZeroZ([q3_fac1; q3_fac2; q3_fac3]);
+        %q3Num = sum(qList3 >0)
+        %---------------------
+        q3_fac1 = M3_rectangle(featureList2_qd(ap,:), 1, 400, 1);
+        q3_fac2 = M3_regular(featureTmp5);
+        q3 = M3_addZeroZ([q3_fac1; q3_fac2; ]);
+        q3Num = sum(q3 >0)
+        q3_fac1 = M3_rectangle(q3, 1, 80, 1);
+        q3_fac2 = M3_regular(featureList2_qd(ap,:));
+        q3 = M3_addZeroZ([q3_fac1; q3_fac2; ]);
+        q3Num = sum(q3 >0)
+        qList3 = q3;
+
 
         %qList4 = featureList4(ap,:);
         %q4Num = sum(qList4 >0)
@@ -2504,6 +2553,7 @@ for beta=1:1:1
         %qList4 = M3_addZeroZ([q4_fac1; q4_fac2; q4_fac3]);
         %qList4 = featureList3(ap,:);
         %---------------------
+        %q4_fac0 = M3_rectangle(featureTmp1, 1, 3100,1);
         q4_fac1 = M3_rectangle(featureTmp5, 0, 300, 0);
         q4_fac2 = M3_rectangle(featureTmp5, 1, 300, 0);
         q4_fac3 = M3_regular(featureList2_qd(ap,:));
@@ -2549,7 +2599,7 @@ for beta=1:1:1
         %q5Num = sum(qList5 >0)
 
         %---------------------
-        q_cje_normal  = exp (-1 .* ((q_cur_cje - avg_cje_100) / avg_cje_100 ).^2)
+        %q_cje_normal  = exp (-1 .* ((q_cur_cje - avg_cje_100) / avg_cje_100 ).^2)
         %qList5 = M3_regular( featureList2_qd(ap,:) ) .* q_cje_normal;
         %q5Num  = sum(qList5 >0)
         %---------------------
@@ -2582,11 +2632,6 @@ for beta=1:1:1
         q5_fac3 = M3_regular(featureList2_qd(ap,:));
         qList5 = M3_addZeroZ([q5_fac1; q5_fac2; q5_fac3]);
         q5Num = sum(qList5 >0)
-
-
-
-
-
 
 
         %qList6_fac1 = M3_regular( M3_rectangle(featureList7_cje(ap,:), 1, floor(countValid*0.02),  1) );
@@ -2684,12 +2729,10 @@ for beta=1:1:1
         %qList7 = M3_addZeroZ([q7_fac1; q7_fac2; q7_fac4]);
         %q7Num = sum(qList7 >0)
         %----------------------------------
-        q7_fac1 = M3_rectangle(qList4, 1, 3,  1);
-        q7_fac2 = M3_regular( featureList3(ap,:) );
-        qList7 = M3_addZero(q7_fac1, q7_fac2);
-        q7Num = sum(qList7 >0)
-
-
+        q6_fac1 = M3_rectangle(qList4, 1, 3,  1);
+        q6_fac2 = M3_regular( featureList3(ap,:) );
+        qList6 = M3_addZero(q6_fac1, q6_fac2);
+        q6Num = sum(qList6 >0)
 
 
 
@@ -2747,10 +2790,10 @@ for beta=1:1:1
         %qList8 = M3_addZeroZ([ q8_fac1; q8_fac2; ]);
         %q8Num = sum(qList8 >0)
         %----------------------------------
-        q6_fac1 = M3_rectangle(qList5, 1, 3,  1);
-        q6_fac2 = M3_regular( featureList3(ap,:) );
-        qList6 = M3_addZero(q6_fac1, q6_fac2);
-        q6Num = sum(qList6 >0)
+        q7_fac1 = M3_rectangle(qList5, 1, 3,  1);
+        q7_fac2 = M3_regular( featureList3(ap,:) );
+        qList7 = M3_addZero(q7_fac1, q7_fac2);
+        q7Num = sum(qList7 >0)
 
         % step from q8
         %q6_fac1 = M3_regular( M3_rectangle(qList4, 1, 3,  1) );
@@ -2780,7 +2823,7 @@ for beta=1:1:1
         %qList8 = M3_addZero(q8_fac1, q8_fac2);
         %q8Num = sum(qList8 >0)
         %q8_fac1 = 1 - M3_rectangle(featureTmp5, 1, 300,  1);
-        q8_fac1 = M3_rectangle(featureTmp5, 1, 300, 0);
+        q8_fac1 = M3_rectangle(featureTmp5, 1, 400, 0);
         q8_fac2 = M3_regular(featureList2_qd(ap,:));
         qList8 = M3_addZeroZ([q8_fac1; q8_fac2]);
         q8Num = sum(qList8 >0)
@@ -2807,6 +2850,7 @@ for beta=1:1:1
         qList1 = rand(size(qList4));
         %qList3 = qList4;
         %qList8 = qList2;
+        %qList6 = qList5;
 
         % ******************************************
         %   record valid count.
@@ -3843,6 +3887,7 @@ end  % endof each ap.
             Proi(4, col) = sumRoi_aps;
             Proi(5, col) = SUCMEAN;
             Proi(6, col) = sum(m3(:, indexEnd + checkZoneUnitWidth*(Modelx-1) + 13)); % ROI of champion.
+            Proi(7, col) = 1-tradeAps/validAps; % kong rate.
 
             aaa
             zhuiZhangYiYuan=[ mean(aaa,2) mean(bbb,2) ]
@@ -4831,7 +4876,8 @@ end
 %% statistic display
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 A_table
-B_table = [G_pg; 1.11111*ones(size(G_ROI_TABLE)); G_ROI_TABLE]
+%B_table = [G_pg; 1.11111*ones(size(G_ROI_TABLE)); G_ROI_TABLE]
+B_table = [G_pg; 1.11111*ones(3,8); G_ROI_TABLE]
 dlmwrite("B_Table.edat", B_table, "\t", 'precision', '%2.7f');
 
 
